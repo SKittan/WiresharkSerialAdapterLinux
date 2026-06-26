@@ -67,9 +67,9 @@ std::string FrameMulti          = "2.0";
 std::string FrameDelay          = "0.0";
 std::string FrameCorrect        = "none";
 std::string WiresharkDLT        = "250";
-std::string CaptureOutputPipeName = "";
-std::string ControlInPipeName   = "";
-std::string ControlOutPipeName  = "";
+std::string CaptureOutputPipeName = "WiresharkSerialAdapterCapturePipe";
+std::string ControlInPipeName   = "WiresharkSerialAdapterControlInPipe";
+std::string ControlOutPipeName  = "WiresharkSerialAdapterControlOutPipe";
 
 #define DLT_RTAC_SERIAL 250
 
@@ -245,7 +245,6 @@ void* ComReadThreadFunc(void* /*lpParam*/)
         fprintf(stderr, "Cannot open %s: %s\n", mPORT.c_str(), strerror(errno));
         return nullptr;
     }
-
     // -----------------------------------------------------------------------
     // Configure termios (replaces DCB + SetCommState)
     // -----------------------------------------------------------------------
@@ -444,6 +443,7 @@ int FindModbusFrameEnd(typeFrameByte frame[], int len)
         if (cur_len >= 3) {
             typeFrameByte ModbusFunction = cur_frame[1];
             switch (ModbusFunction) {
+                // Std modbus function codes
                 case 1: case 2: case 3: case 4:
                     QueryCrcLoc = 6;
                     if (cur_len - 1 > 2) ResponseCrcLoc = (int)cur_frame[2] + 3;
@@ -475,6 +475,21 @@ int FindModbusFrameEnd(typeFrameByte frame[], int len)
                 case 24:
                     QueryCrcLoc = 4;
                     if (cur_len - 1 > 4) ResponseCrcLoc = (int)cur_frame[4] + 4;
+                    break;
+                // custom function codes
+                case 0x66:
+                    QueryCrcLoc = (int)cur_frame[3]*2 + 1;
+                    ResponseCrcLoc = 4;
+                    break;
+                case 0x67:
+                    QueryCrcLoc = ResponseCrcLoc = 3;
+                    break;
+                case 0x68: case 0x69:
+                    QueryCrcLoc = ResponseCrcLoc = 5;
+                    break;
+                case 0x6A:
+                    QueryCrcLoc = 2;
+                    ResponseCrcLoc = 0;
                     break;
                 default:
                     if ((0x80 & cur_frame[1]) > 0) {
